@@ -507,10 +507,8 @@ function buildExportDocument(title, rows) {
         background: #fff;
       }
       .export-title {
-        width: min(880px, 100%);
         margin: 0 auto 56px;
-        padding: 14px 22px;
-        background: #ff1f0f;
+        padding: 0;
         color: #000;
         text-align: center;
         font-size: 2.1rem;
