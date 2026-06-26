@@ -25,6 +25,17 @@ const {
 
 const today = new Date();
 const todayKey = toDateKey(today);
+const paletteColors = ["#2f8ecf", "#d94a3f", "#2e7d5b", "#b8874a", "#5b5fc7"];
+const legacyColorMap = new Map([
+  ["#3267b5", "#2f8ecf"],
+  ["#b94967", "#d94a3f"],
+  ["#a96720", "#b8874a"],
+  ["#d65a4a", "#d94a3f"],
+  ["#178077", "#2e7d5b"],
+  ["#7f8f2f", "#2e7d5b"],
+  ["#6d5bb8", "#5b5fc7"],
+  ["#59636e", "#5b5fc7"],
+]);
 
 const openHabitDialogButton = document.querySelector("#openHabitDialog");
 const habitDialog = document.querySelector("#habitDialog");
@@ -156,13 +167,20 @@ cancelDeleteButton.addEventListener("click", () => {
   deleteDialog.close();
 });
 
-confirmDeleteButton.addEventListener("click", () => {
-  if (habitPendingDelete) {
-    deleteHabit(habitPendingDelete);
-  }
+confirmDeleteButton.addEventListener("click", confirmPendingDelete);
 
+deleteDialog.addEventListener("keydown", (event) => {
+  if (event.key !== "Enter" || event.isComposing) return;
+
+  event.preventDefault();
+  confirmPendingDelete();
+});
+
+deleteDialog.addEventListener("close", () => {
   habitPendingDelete = null;
-  deleteDialog.close();
+  deleteDialog.classList.remove("anchored-modal");
+  deleteDialog.style.left = "";
+  deleteDialog.style.top = "";
 });
 
 function renderHabits() {
@@ -184,8 +202,9 @@ function renderHabits() {
     const dominantStatus = getDominantStatus(counts);
 
     card.dataset.habitId = habit.id;
-    card.style.setProperty("--habit-color", habit.color);
-    card.style.setProperty("--habit-bg", hexToRgba(habit.color, 0.12));
+    const displayColor = getPaletteColor(habit.color);
+    card.style.setProperty("--habit-color", displayColor);
+    card.style.setProperty("--habit-bg", hexToRgba(displayColor, 0.12));
     card.classList.toggle("status-done", dominantStatus === DONE);
     card.classList.toggle("status-missed", dominantStatus === MISSED);
     card.querySelector(".habit-title").textContent = habit.name;
@@ -197,7 +216,7 @@ function renderHabits() {
 
     setupPeriodEditor(card, habit);
     card.querySelector(".drag-handle").addEventListener("pointerdown", (event) => startHabitDrag(event, habit.id));
-    card.querySelector(".delete-button").addEventListener("click", () => askDeleteHabit(habit));
+    card.querySelector(".delete-button").addEventListener("click", (event) => askDeleteHabit(habit, event.currentTarget));
 
     const daysGrid = card.querySelector(".days-grid");
     days.forEach((day, index) => {
@@ -432,10 +451,44 @@ function setDayStatus(habitId, dayKey, status) {
   renderHabits();
 }
 
-function askDeleteHabit(habit) {
+function askDeleteHabit(habit, triggerButton) {
   habitPendingDelete = habit.id;
   deleteDialogText.textContent = `Привычка "${habit.name}" будет удалена вместе со всеми отметками.`;
+  deleteDialog.classList.add("anchored-modal");
   openDialog(deleteDialog);
+  positionDeleteDialog(triggerButton);
+  confirmDeleteButton.focus();
+}
+
+function confirmPendingDelete() {
+  if (habitPendingDelete) {
+    deleteHabit(habitPendingDelete);
+  }
+
+  deleteDialog.close();
+}
+
+function positionDeleteDialog(triggerButton) {
+  if (!triggerButton) return;
+
+  const gap = 10;
+  const pagePadding = 12;
+  const triggerRect = triggerButton.getBoundingClientRect();
+  const dialogRect = deleteDialog.getBoundingClientRect();
+  const maxLeft = window.innerWidth - dialogRect.width - pagePadding;
+  const maxTop = window.innerHeight - dialogRect.height - pagePadding;
+  const preferredLeft = triggerRect.right - dialogRect.width;
+  const preferredTop = triggerRect.bottom + gap;
+  const fallbackTop = triggerRect.top - dialogRect.height - gap;
+
+  const left = Math.min(Math.max(preferredLeft, pagePadding), maxLeft);
+  const top =
+    preferredTop <= maxTop
+      ? preferredTop
+      : Math.min(Math.max(fallbackTop, pagePadding), maxTop);
+
+  deleteDialog.style.left = `${left}px`;
+  deleteDialog.style.top = `${top}px`;
 }
 
 function deleteHabit(habitId) {
@@ -523,10 +576,11 @@ function buildExportDocument(title, rows) {
         display: grid;
         grid-template-columns: 290px minmax(0, 1fr);
         gap: 38px;
-        align-items: center;
+        align-items: stretch;
         break-inside: avoid;
       }
       .habit-name-box {
+        height: 100%;
         min-height: 92px;
         display: grid;
         place-items: center;
@@ -587,7 +641,7 @@ function buildExportDocument(title, rows) {
 
 function renderExportRow(row) {
   const days = Array.from({ length: row.period }, (_, index) => `<span class="day-dot">${index + 1}</span>`).join("");
-  const color = sanitizeColor(row.color);
+  const color = getPaletteColor(row.color);
   const softColor = hexToRgba(color, 0.15);
 
   return `<article class="export-row" style="--row-color: ${color}; --row-bg: ${softColor};">
@@ -607,6 +661,12 @@ function escapeHtml(value) {
 
 function sanitizeColor(color) {
   return /^#[0-9a-f]{6}$/i.test(color) ? color : "#2e7d5b";
+}
+
+function getPaletteColor(color) {
+  const sanitizedColor = sanitizeColor(color).toLowerCase();
+  if (paletteColors.includes(sanitizedColor)) return sanitizedColor;
+  return legacyColorMap.get(sanitizedColor) || "#2e7d5b";
 }
 
 function hexToRgba(hex, alpha) {
