@@ -96,8 +96,9 @@ h1 {
 }
 
 .today-card {
-  min-width: 168px;
-  padding: 16px 18px;
+  width: fit-content;
+  min-width: 0;
+  padding: 14px 18px;
   text-align: right;
 }
 
